@@ -3,11 +3,16 @@ const assert = require('assert');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { spawn } = require('node:child_process');
+const shlex = require('shlex'); // Use shlex to handle quoted arguments
+
 
 class TestLibrary {
-    constructor(baseUrl = 'http://localhost:8080', serverCommand, serverHealthUrl) {
+    constructor({baseUrl = 'http://localhost:8080', serverCommand, serverHealthUrl}) {
         this.baseUrl = baseUrl;
-        this.serverCommand = serverCommand.split(' '); // Split command into executable and arguments
+        if(!serverCommand) {
+            throw new Error("server command should be defined");
+        }
+        this.serverCommand = shlex.split(serverCommand); // Handle command with quoted arguments
         this.serverHealthUrl = serverHealthUrl;
         this.serverProcess = null; // To store the child process instance
         this.jwtSecret = crypto.randomBytes(32).toString('hex'); // Generate a random secret for signing JWTs
@@ -33,6 +38,7 @@ class TestLibrary {
                 validateStatus: () => true // This allows us to handle all status codes
             });
 
+
             // Assert status code
             assert.strictEqual(response.status, expectedStatus, `Expected status ${expectedStatus}, but got ${response.status}`);
 
@@ -53,7 +59,7 @@ class TestLibrary {
         }
     }
 
-    getToken({ roles = [], userId = 'test-user', username = 'test-username', email = 'test@example.com', expiresIn = '1h' }) {
+    static getToken({ roles = [], userId = 'test-user', username = 'test-username', email = 'test@example.com', expiresIn = '1h' }) {
         const payload = {
             jti: crypto.randomUUID(),
             exp: Math.floor(Date.now() / 1000) + (60 * 60), // 1 hour from now
@@ -131,7 +137,7 @@ class TestLibrary {
         });
     }
 
-    async waitForServer(maxAttempts = 10, interval = 1000) {
+    async waitForServer(maxAttempts = 20, interval = 1000) {
         let attempts = 0;
 
         const checkHealth = async () => {

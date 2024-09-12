@@ -1,8 +1,9 @@
 const express = require('express');
 const dns2 = require('dns2');
 const { Packet } = dns2;
-
+const fs = require("fs");
 const net = require('net');
+const https = require('https');
 
 class CustomDNSResolver {
 
@@ -12,27 +13,24 @@ class CustomDNSResolver {
         this.dnsDefaultServer = dnsDefaultServer;
         this.server = dns2.createServer({
             udp: true,
-            handle: (request, send, rinfo) => {
+            tcp:true,
+            handle: async (request, send, rinfo) => {
+
                 const response = Packet.createResponseFromRequest(request);
                 const [ question ] = request.questions;
-                const { name } = question;
-
-                console.log(`DNS Query for ${name}`);
-
-                // Add your domain overrides here
-                const dnsOverrides = {
-                    'example.com': '172.20.0.20',
-                    // Add more overrides as needed
-                };
-
+                const { name, type } = question;
                 if (dnsExclude.indexOf(name) === -1) {
-                    response.answers.push({
-                        name,
-                        type: Packet.TYPE.A,
-                        class: Packet.CLASS.IN,
-                        ttl: 300,
-                        address: serverIp
-                    });
+                    if (type === Packet.TYPE.A) {
+                        // Handle A record (IPv4)
+                        response.answers.push({
+                            name,
+                            type: Packet.TYPE.A,
+                            class: Packet.CLASS.IN,
+                            ttl: 300,
+                            address: serverIp // Your server's IPv4 address
+                        });
+                    }
+                    send(response);
                 } else {
                     // For non-overridden domains, forward the request to the system's DNS
                     const systemDns = new dns2({
@@ -50,8 +48,6 @@ class CustomDNSResolver {
                     });
                     return;
                 }
-
-                send(response);
             }
         });
 
@@ -79,6 +75,7 @@ class CustomDNSResolver {
                 address: this.serverIp,
             },
         });
+
     }
 
     shutdown() {
@@ -87,40 +84,51 @@ class CustomDNSResolver {
 }
 
 class TestServer {
-    constructor({listenPorts=[80,443], serverIp="127.0.0.1",dnsExclude=[], dnsDefaultServer="8.8.8.8", dnsPort=53}) {
+    constructor({listenPorts=[80], listenSslPorts=[443], serverIp="127.0.0.1",dnsExclude=[], dnsDefaultServer="8.8.8.8", dnsPort=53, serviceHeader= 'x-kong-service-name'}) {
         this.app = express();
         this.listenPorts = listenPorts;
+        this.listenSslPorts = listenSslPorts;
+        this.listeners = [];
+        this.httpsOptions = {
+            key: fs.readFileSync('server.key'), // Path to your private key
+            cert: fs.readFileSync('server.cert') // Path to your certificate
+        };
+
         this.serverIp = serverIp;
         this.customResolver = new CustomDNSResolver({serverIp, dnsExclude, dnsDefaultServer, dnsPort});
         this.app = express();
         this.app.use(express.json());
         this.app.all('*', (req, res) => {
-            const serviceName = req.headers['x-kong-service-name'];
+            const serviceName = req.headers[serviceHeader.toLowerCase()];
             res.json({
                 serviceCalled: serviceName,
                 method: req.method,
                 path: req.path,
-                headers: req.headers,
+                headers: {...req.headers,"test-server":"true"},
                 body: req.body
             });
         });
 
     }
-    listen() {
+    async listen() {
         this.customResolver.listen();
         const serverIp = this.serverIp;
         this.listenPorts.forEach(port => {
-            this.app.listen(port, serverIp);
+            this.listeners.push(this.app.listen(port, serverIp));
         });
+
+        this.listenSslPorts.forEach(port => {
+            this.listeners.push(https.createServer(this.httpsOptions, this.app).listen(port, serverIp));
+        })
+
     }
 
     shutdown() {
         this.customResolver.shutdown();
-        this.app.close();
+        this.listeners.forEach(listener => listener.close());
+
     }
 }
 
 module.exports = {CustomDNSResolver, TestServer};
 
-const server = new TestServer({listenPorts:[8080,8443], dnsPort:5333});
-server.listen();
