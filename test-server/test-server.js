@@ -120,6 +120,9 @@ class TestServer {
         this.listenSslPorts.forEach(port => {
             this.listeners.push(https.createServer(this.httpsOptions, this.app).listen(port, serverIp));
         })
+        return new Promise(resolve => {
+            setTimeout(resolve, 1000);
+        })
 
     }
 

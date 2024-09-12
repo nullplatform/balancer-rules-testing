@@ -26,7 +26,8 @@ class TestLibrary {
                           expectedService = null,
                           expectedStatus = 200,
                           assertion = null,
-                          timeout = 5000
+                          timeout = 5000,
+                          expectedHeaders= null
                       }) {
         try {
             const response = await axios({
@@ -38,13 +39,19 @@ class TestLibrary {
                 validateStatus: () => true // This allows us to handle all status codes
             });
 
-
+            console.log(response.data)
             // Assert status code
             assert.strictEqual(response.status, expectedStatus, `Expected status ${expectedStatus}, but got ${response.status}`);
 
             // Assert service
             if (expectedService) {
                 assert.strictEqual(response.data.serviceCalled, expectedService, `Expected service ${expectedService}, but got ${response.data.serviceCalled}`);
+            }
+
+            if(expectedHeaders) {
+                for (const [key, value] of Object.entries(expectedHeaders)) {
+                    assert.strictEqual(response.data.headers[key], value, `Expected header ${key} to be ${value}, but got ${response.data.headers[key]}`);
+                }
             }
 
             // Run custom assertion if provided
@@ -106,7 +113,6 @@ class TestLibrary {
             });
 
             this.serverProcess.on('exit', (code, signal) => {
-                console.log(`Server process exited with code ${code} and signal ${signal}`);
                 this.serverProcess = null;
             });
 
@@ -128,7 +134,6 @@ class TestLibrary {
             }
 
             this.serverProcess.on('close', (code) => {
-                console.log(`Server stopped with code ${code}`);
                 this.serverProcess = null;
                 resolve();
             });

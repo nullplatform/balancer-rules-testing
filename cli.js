@@ -82,7 +82,7 @@ process.on('SIGINT', async () => {
     // Call your function here
     await cleanUp();
 
-    process.exit();
+    process.exit(1);
 });
 
 process.on('SIGTERM', async () => {
@@ -90,10 +90,11 @@ process.on('SIGTERM', async () => {
     // Call your function here
     await cleanUp();
 
-    process.exit();
+    process.exit(1);
 });
 
 async function runTests() {
+    let exitCode = 0;
     try {
         await testLib.startServer();
 
@@ -111,11 +112,12 @@ async function runTests() {
         console.log('All tests completed successfully!');
     } catch (error) {
         console.error('Test run failed:', error);
+        exitCode = 1;
     } finally {
         // Cleanup
         console.log('Cleaning up...');
         await cleanUp();
-        process.exit(0);
+        process.exit(exitCode);
     }
 }
 
