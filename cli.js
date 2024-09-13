@@ -5,7 +5,6 @@ const { TestServer } = require('./test-server/test-server');
 const TestLibrary = require('./test-library/test-library');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
 const jest = require('jest');
 
 program
