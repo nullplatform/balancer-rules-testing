@@ -2,8 +2,9 @@ const axios = require('axios');
 const assert = require('assert');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const {exec, spawn } = require('node:child_process');
+const { exec, spawn } = require('node:child_process');
 const shlex = require('shlex'); // Use shlex to handle quoted arguments
+const treeKill = require('tree-kill');
 
 
 class TestLibrary {
@@ -71,7 +72,7 @@ class TestLibrary {
         }
     }
 
-    static getToken({ roles = [], userId = 'test-user', username = 'test-username', email = 'test@example.com', expiresIn = '1h' }) {
+    getToken({ roles = [], userId = 'test-user', username = 'test-username', email = 'test@example.com', expiresIn = '1h' }) {
         const payload = {
             jti: crypto.randomUUID(),
             exp: Math.floor(Date.now() / 1000) + (60 * 60), // 1 hour from now
@@ -110,7 +111,7 @@ class TestLibrary {
             }
 
             const [command, ...args] = this.serverCommand;
-            this.serverProcess = spawn(command, args, {shell: true, stdio:"inherit"});
+            this.serverProcess = spawn(command, args, {shell: true, stdio:"inherit", detached: false});
 
             this.serverProcess.on('error', (err) => {
                 console.error('Failed to start server:', err);
@@ -133,6 +134,18 @@ class TestLibrary {
     }
 
     async stopServer() {
+        const killProcess = (pid) => {
+            return new Promise((resolveKill) => {
+                treeKill(pid, 'SIGTERM', (err) => {
+                    if (err) {
+                        console.error(`Failed to kill process ${pid}:`, err);
+                    } else {
+                        console.log(`Successfully killed process ${pid}`);
+                    }
+                    resolveKill();
+                });
+            });
+        };
         return new Promise((resolve, reject) => {
             if (!this.serverProcess) {
                 return reject(new Error('No server process running'));
@@ -143,7 +156,6 @@ class TestLibrary {
 
             });
 
-            this.serverProcess.kill('SIGTERM'); // Gracefully stop the server
 
             if (this.serverStopCommand) {
                 // Execute the stop command
@@ -159,7 +171,7 @@ class TestLibrary {
                     });
                 });
             } else {
-                resolve();
+                killProcess(this.serverProcess.pid);
             }
         });
     }
@@ -207,3 +219,4 @@ class TestLibrary {
 }
 
 module.exports = TestLibrary;
+
