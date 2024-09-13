@@ -133,7 +133,7 @@ class TestLibrary {
     }
 
     async stopServer() {
-        return new Promise((resolve, reject) => {
+        return await new Promise((resolve, reject) => {
             if (!this.serverProcess) {
                 return reject(new Error('No server process running'));
             }
@@ -143,7 +143,7 @@ class TestLibrary {
 
             });
 
-            this.serverProcess.kill('SIGTERM'); // Gracefully stop the server
+            
 
             if (this.serverStopCommand) {
                 // Execute the stop command
@@ -159,6 +159,7 @@ class TestLibrary {
                     });
                 });
             } else {
+                this.serverProcess.kill('SIGKILL'); // Gracefully stop the server
                 resolve();
             }
         });
