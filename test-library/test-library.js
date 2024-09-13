@@ -109,13 +109,7 @@ class TestLibrary {
             }
 
             const [command, ...args] = this.serverCommand;
-            this.serverProcess = spawn(command, args);
-
-            this.serverProcess.on('data', (data) => {
-                if(this.debug) {
-                    console.log(data);
-                }
-            });
+            this.serverProcess = spawn(command, args, {shell: true, stdio:"inherit"});
 
             this.serverProcess.on('error', (err) => {
                 console.error('Failed to start server:', err);
@@ -152,7 +146,7 @@ class TestLibrary {
         });
     }
 
-    async waitForServer(maxAttempts = 20, interval = 1000) {
+    async waitForServer(maxAttempts = 120, interval = 1000) {
         let attempts = 0;
 
         const checkHealth = async () => {
