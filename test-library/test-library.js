@@ -7,11 +7,12 @@ const shlex = require('shlex'); // Use shlex to handle quoted arguments
 
 
 class TestLibrary {
-    constructor({baseUrl = 'http://localhost:8080', serverCommand, serverHealthUrl, debug=false}) {
+    constructor({baseUrl = 'http://localhost:8080', serverCommand, serverHealthUrl, debug=false, serverStopCommand}) {
         this.baseUrl = baseUrl;
         if(!serverCommand) {
             throw new Error("server command should be defined");
         }
+        this.serverStopCommand = serverStopCommand;
         this.debug = debug;
         this.serverCommand = shlex.split(serverCommand); // Handle command with quoted arguments
         this.serverHealthUrl = serverHealthUrl;
@@ -139,10 +140,27 @@ class TestLibrary {
 
             this.serverProcess.on('close', (code) => {
                 this.serverProcess = null;
-                resolve();
+
             });
 
             this.serverProcess.kill('SIGTERM'); // Gracefully stop the server
+
+            if (this.serverStopCommand) {
+                // Execute the stop command
+                new Promise(() => {
+                    exec(this.serverStopCommand, (error, stdout, stderr) => {
+                        if (error) {
+                            console.error(`Error stopping server: ${error}`);
+                            reject(error);
+                        } else {
+                            console.log('Server stopped successfully');
+                            resolve();
+                        }
+                    });
+                });
+            } else {
+                resolve();
+            }
         });
     }
 

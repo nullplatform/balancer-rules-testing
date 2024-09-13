@@ -20,6 +20,8 @@ program
     .option('--balancer-health-url <healthUrl>', 'Balancer health url',"http://127.0.0.1:8080/health")
     .option('--balancer-base-url <healthUrl>', 'Balancer health url',"http://127.0.0.1:8080")
     .option('--balancer-start-command <command>', 'Command to start the balancer')
+    .option('--balancer-stop-command <command>', 'Command to stop the balancer')
+
     .option('--service-header <headerName>', 'Service header to be returned in the response', 'x-kong-service-name')
     .option('--debug <true/false>', 'Sets debug to true', "false")
     .parse(process.argv);
@@ -28,6 +30,7 @@ const options = program.opts();
 let config;
 let server;
 let testLib;
+
 // Parse options
 try {
     config = {
@@ -43,7 +46,8 @@ try {
         balancer: {
             healthUrl: options.balancerHealthUrl,
             startCommand: options.balancerStartCommand,
-            baseUrl: options.balancerBaseUrl
+            baseUrl: options.balancerBaseUrl,
+            stopCommand: options.balancerStopCommand,
         },
         tests: {
             path: options.tests
@@ -53,14 +57,14 @@ try {
     if(!config.tests.path) {
         throw new Error('Test path is required');
     }
-    // Start TestServer
+    // Initialize TestServer
     server = new TestServer({...config.server, debug: config.debug});
 
-
-// Initialize TestLibrary
+    // Initialize TestLibrary
     testLib = new TestLibrary({
         baseUrl: `${config.balancer.baseUrl}`,
         serverCommand: config.balancer.startCommand,
+        serverStopCommand: config.balancer.stopCommand,
         serverHealthUrl: config.balancer.healthUrl,
         debug: config.debug
     });
@@ -73,32 +77,32 @@ try {
 
 async function cleanUp() {
     if (server) {
-        server.shutdown();
+        console.log("Stopping mock server");
+        await server.shutdown();
     }
     if (testLib) {
+        console.log("Stopping server");
         await testLib.stopServer();
     }
 }
 
 process.on('SIGINT', async () => {
     console.log('Caught interrupt signal (SIGINT), cleaning up...');
-    // Call your function here
     await cleanUp();
-
     process.exit(1);
 });
 
 process.on('SIGTERM', async () => {
     console.log('Caught termination signal (SIGTERM), cleaning up...');
-    // Call your function here
     await cleanUp();
-
     process.exit(1);
 });
 
 async function runTests() {
     let exitCode = 0;
     try {
+        // Start the server and testLib before running tests
+        await server.listen();
         await testLib.startServer();
 
         const testFolders = config.tests.path.split(",").map(folder => folder.trim());
@@ -113,10 +117,13 @@ async function runTests() {
 
         global.__TEST_LIBRARY__ = testLib;
 
-        // Instead of rootDir, use roots which can accept multiple test directories
+        // Configure Jest
         const jestConfig = {
             roots: testFolders, // Set the roots to the test folders
             testMatch: ['**/*.test.js'], // Match test files in each folder
+            setupFilesAfterEnv: [path.resolve(__dirname, 'jest.setup.js')], // Add setup file
+            runInBand: true, // Run tests serially in the current process
+            testEnvironment: 'node', // Ensure tests run in Node environment
         };
 
         if(config.debug) {
@@ -140,28 +147,30 @@ async function runTests() {
     }
 }
 
-async function startServer() {
-    await server.listen();
+// Create jest.setup.js file if it doesn't exist
+const setupContent = `
+// This file ensures that the global __TEST_LIBRARY__ is available in all tests
+beforeAll(() => {
+    if (!global.__TEST_LIBRARY__) {
+        throw new Error("__TEST_LIBRARY__ is not defined. Make sure it is set before running tests.");
+    }
+});
+`;
+
+const setupFilePath = path.resolve(__dirname, 'jest.setup.js');
+if (!fs.existsSync(setupFilePath)) {
+    fs.writeFileSync(setupFilePath, setupContent);
+    console.log('Created jest.setup.js file');
 }
 
-async function runTestFile(filePath) {
-    console.log(`Running tests in ${filePath}`);
-    const testModule = require(filePath);
-    if (typeof testModule === 'function') {
-        await testModule(testLib);
-    } else {
-        console.error(`${filePath} does not export a function`);
+// Main execution
+async function main() {
+    try {
+        await runTests();
+    } catch (error) {
+        console.error('Unexpected error:', error);
+        process.exit(1);
     }
 }
 
-startServer().catch(error => {
-    console.error('Unexpected error:', error);
-    process.exit(1);
-}).finally(() => {
-    runTests().catch(error => {
-        console.error('Unexpected error:', error);
-        process.exit(1);
-    });
-})
-
-
+main();
