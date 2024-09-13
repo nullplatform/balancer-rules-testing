@@ -102,14 +102,27 @@ async function runTests() {
         await testLib.startServer();
 
         const testFolders = config.tests.path.split(",").map(folder => folder.trim());
-            path.resolve(process.cwd(), config.tests.path);
+        const resolvedTestPaths = testFolders.map(folder => {
+            // Check if the folder is already an absolute path
+            if (path.isAbsolute(folder)) {
+                return path.join(folder, '**/*.test.js');
+            } else {
+                return path.resolve(process.cwd(), folder, '**/*.test.js');
+            }
+        });
+
         global.__TEST_LIBRARY__ = testLib;
+
+        // Instead of rootDir, use roots which can accept multiple test directories
         const jestConfig = {
-            rootDir: process.cwd(),
-            testMatch: testFolders.map(folder =>
-                path.resolve(process.cwd(), folder, '**/*.test.js')
-            ),
+            roots: testFolders, // Set the roots to the test folders
+            testMatch: ['**/*.test.js'], // Match test files in each folder
         };
+
+        if(config.debug) {
+            console.log(jestConfig);
+        }
+
         const result = await jest.runCLI(jestConfig, [process.cwd()]);
         if (!result.results.success) {
             throw new Error('Tests failed');
