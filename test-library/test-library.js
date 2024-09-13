@@ -7,11 +7,12 @@ const shlex = require('shlex'); // Use shlex to handle quoted arguments
 
 
 class TestLibrary {
-    constructor({baseUrl = 'http://localhost:8080', serverCommand, serverHealthUrl}) {
+    constructor({baseUrl = 'http://localhost:8080', serverCommand, serverHealthUrl, debug=false}) {
         this.baseUrl = baseUrl;
         if(!serverCommand) {
             throw new Error("server command should be defined");
         }
+        this.debug = debug;
         this.serverCommand = shlex.split(serverCommand); // Handle command with quoted arguments
         this.serverHealthUrl = serverHealthUrl;
         this.serverProcess = null; // To store the child process instance
@@ -39,7 +40,10 @@ class TestLibrary {
                 validateStatus: () => true // This allows us to handle all status codes
             });
 
-            console.log(response.data)
+            if(this.debug) {
+                console.log("Response data: ");
+                console.log(response.data)
+            }
             // Assert status code
             assert.strictEqual(response.status, expectedStatus, `Expected status ${expectedStatus}, but got ${response.status}`);
 
@@ -105,7 +109,13 @@ class TestLibrary {
             }
 
             const [command, ...args] = this.serverCommand;
-            this.serverProcess = spawn(command, args, { stdio: 'inherit' });
+            this.serverProcess = spawn(command, args);
+
+            this.serverProcess.on('data', (data) => {
+                if(this.debug) {
+                    console.log(data);
+                }
+            });
 
             this.serverProcess.on('error', (err) => {
                 console.error('Failed to start server:', err);

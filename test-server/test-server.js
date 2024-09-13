@@ -7,8 +7,9 @@ const https = require('https');
 
 class CustomDNSResolver {
 
-    constructor({ serverIp, dnsExclude=[], dnsDefaultServer="8.8.8.8", dnsPort=53 }) {
+    constructor({ serverIp, dnsExclude=[], dnsDefaultServer="8.8.8.8", dnsPort=53, debug }) {
         this.dnsPort = dnsPort;
+        this.debug = debug;
         this.serverIp = serverIp;
         this.dnsDefaultServer = dnsDefaultServer;
         this.server = dns2.createServer({
@@ -52,7 +53,9 @@ class CustomDNSResolver {
         });
 
         this.server.on('listening', () => {
-            console.log(this.server.addresses());
+            if(this.debug) {
+                console.log("DNS Server listening on", this.server.addresses());
+            }
         });
 
         this.server.on('close', () => {
@@ -84,22 +87,24 @@ class CustomDNSResolver {
 }
 
 class TestServer {
-    constructor({listenPorts=[80], listenSslPorts=[443], serverIp="127.0.0.1",dnsExclude=[], dnsDefaultServer="8.8.8.8", dnsPort=53, serviceHeader= 'x-kong-service-name'}) {
+    constructor({listenPorts=[80], listenSslPorts=[443], serverIp="127.0.0.1",dnsExclude=[], dnsDefaultServer="8.8.8.8", dnsPort=53, serviceHeader= 'x-kong-service-name', debug= false}) {
         this.app = express();
         this.listenPorts = listenPorts;
         this.listenSslPorts = listenSslPorts;
         this.listeners = [];
+        this.debug = debug;
         this.httpsOptions = {
             key: fs.readFileSync('server.key'), // Path to your private key
             cert: fs.readFileSync('server.cert') // Path to your certificate
         };
 
         this.serverIp = serverIp;
-        this.customResolver = new CustomDNSResolver({serverIp, dnsExclude, dnsDefaultServer, dnsPort});
+        this.customResolver = new CustomDNSResolver({serverIp, dnsExclude, dnsDefaultServer, dnsPort, debug});
         this.app = express();
         this.app.use(express.json());
         this.app.all('*', (req, res) => {
             const serviceName = req.headers[serviceHeader.toLowerCase()];
+
             res.json({
                 serviceCalled: serviceName,
                 method: req.method,

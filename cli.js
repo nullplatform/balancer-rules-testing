@@ -10,7 +10,7 @@ const jest = require('jest');
 
 program
     .version('1.0.0')
-    .option('-t, --tests <path>', 'Path to test file or directory')
+    .option('-t, --tests <path>', 'Path to test file or directory, you can use multiple folders split by comma')
     .option('--listen-ports <ports>', 'Comma-separated list of ports to listen on for mock server', '80')
     .option('--listen-ssl-ports <ports>', 'Comma-separated list of ports to listen on for mock server in ssl', '443')
     .option('--server-ip <ip>', 'IP address for the test server', '127.0.0.1')
@@ -21,6 +21,7 @@ program
     .option('--balancer-base-url <healthUrl>', 'Balancer health url',"http://127.0.0.1:8080")
     .option('--balancer-start-command <command>', 'Command to start the balancer')
     .option('--service-header <headerName>', 'Service header to be returned in the response', 'x-kong-service-name')
+    .option('--debug <true/false>', 'Sets debug to true', "false")
     .parse(process.argv);
 
 const options = program.opts();
@@ -46,20 +47,22 @@ try {
         },
         tests: {
             path: options.tests
-        }
+        },
+        debug: options?.debug === "true"
     };
     if(!config.tests.path) {
         throw new Error('Test path is required');
     }
     // Start TestServer
-    server = new TestServer(config.server);
+    server = new TestServer({...config.server, debug: config.debug});
 
 
 // Initialize TestLibrary
     testLib = new TestLibrary({
         baseUrl: `${config.balancer.baseUrl}`,
         serverCommand: config.balancer.startCommand,
-        serverHealthUrl: config.balancer.healthUrl
+        serverHealthUrl: config.balancer.healthUrl,
+        debug: config.debug
     });
 
 }catch (e) {
@@ -98,11 +101,14 @@ async function runTests() {
     try {
         await testLib.startServer();
 
-        const testsPath = path.resolve(process.cwd(), config.tests.path);
+        const testFolders = config.tests.path.split(",").map(folder => folder.trim());
+            path.resolve(process.cwd(), config.tests.path);
         global.__TEST_LIBRARY__ = testLib;
         const jestConfig = {
             rootDir: process.cwd(),
-            testMatch: [path.resolve(process.cwd(), testsPath, '**/*.test.js')],
+            testMatch: testFolders.map(folder =>
+                path.resolve(process.cwd(), folder, '**/*.test.js')
+            ),
         };
         const result = await jest.runCLI(jestConfig, [process.cwd()]);
         if (!result.results.success) {
