@@ -2,7 +2,7 @@ const axios = require('axios');
 const assert = require('assert');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { exec, spawn } = require('node:child_process');
+const {exec, spawn } = require('node:child_process');
 const shlex = require('shlex'); // Use shlex to handle quoted arguments
 const treeKill = require('tree-kill');
 
@@ -219,4 +219,3 @@ class TestLibrary {
 }
 
 module.exports = TestLibrary;
-
