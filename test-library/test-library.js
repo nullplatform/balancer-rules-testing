@@ -125,9 +125,9 @@ class TestLibrary {
             // Wait for server to be healthy
             this.waitForServer()
                 .then(resolve)
-                .catch((err) => {
+                .catch(async (err) => {
                     console.error('Server failed to start:', err);
-                    this.stopServer(); // Stop the server if health check fails
+                    await this.stopServer(); // Stop the server if health check fails
                     reject(err);
                 });
         });
@@ -172,6 +172,7 @@ class TestLibrary {
                 });
             } else {
                 killProcess(this.serverProcess.pid);
+                resolve();
             }
         });
     }

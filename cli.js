@@ -142,6 +142,7 @@ async function runTests() {
         // Cleanup
         console.log('Cleaning up...');
         await cleanUp();
+        console.log("Exiting with code", exitCode);
         process.exit(exitCode);
     }
 }
